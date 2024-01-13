@@ -54,6 +54,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.19 // indirect
+	github.com/rabbitmq/amqp091-go v1.9.0 // indirect
 	go.uber.org/mock v0.3.0 // indirect
 )
 

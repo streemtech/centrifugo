@@ -19,6 +19,7 @@ type ConsumerType string
 const (
 	ConsumerTypePostgres = "postgresql"
 	ConsumerTypeKafka    = "kafka"
+	ConsumerTypeAMQP     = "amqp"
 )
 
 type ConsumerConfig struct {
@@ -32,6 +33,8 @@ type ConsumerConfig struct {
 	Postgres *PostgresConfig `mapstructure:"postgresql" json:"postgresql,omitempty"`
 	// Kafka allows defining options for consumer of kafka type.
 	Kafka *KafkaConfig `mapstructure:"kafka" json:"kafka,omitempty"`
+	//Rabbitqm allows defining options for consumer of amqp type
+	AMQP *AMQPConfig `mapstructure:"amqp" json:"amqp,omitempty"`
 }
 
 type Dispatcher interface {
@@ -57,7 +60,8 @@ func New(nodeID string, logger Logger, dispatcher Dispatcher, configs []Consumer
 			log.Fatal().Msgf("invalid consumer name: %s, must be unique", config.Name)
 		}
 		names = append(names, config.Name)
-		if config.Type == ConsumerTypePostgres {
+		switch config.Type {
+		case ConsumerTypePostgres:
 			if config.Disabled { // Important to keep this check inside specific type for proper config validation.
 				continue
 			}
@@ -74,7 +78,7 @@ func New(nodeID string, logger Logger, dispatcher Dispatcher, configs []Consumer
 			}
 			log.Info().Str("consumer_name", config.Name).Msg("running consumer")
 			services = append(services, consumer)
-		} else if config.Type == ConsumerTypeKafka {
+		case ConsumerTypeKafka:
 			if config.Disabled {
 				continue
 			}
@@ -99,7 +103,25 @@ func New(nodeID string, logger Logger, dispatcher Dispatcher, configs []Consumer
 			}
 			log.Info().Str("consumer_name", config.Name).Msg("running consumer")
 			services = append(services, consumer)
-		} else {
+		case ConsumerTypeAMQP:
+			if config.Disabled { // Important to keep this check inside specific type for proper config validation.
+				continue
+			}
+			if config.AMQP == nil {
+				config.AMQP = &AMQPConfig{}
+			}
+			address := os.Getenv("CENTRIFUGO_CONSUMERS_AMQP_" + strings.ToUpper(config.Name) + "_ADDRESS")
+			if address != "" {
+				config.AMQP.Address = address
+			}
+
+			consumer, err := NewAMQPConsumer(config.Name, logger, dispatcher, *config.AMQP)
+			if err != nil {
+				return nil, fmt.Errorf("error initializing AMQP consumer (%s): %w", config.Name, err)
+			}
+			log.Info().Str("consumer_name", config.Name).Msg("running consumer")
+			services = append(services, consumer)
+		default:
 			return nil, fmt.Errorf("unknown consumer type: %s", config.Type)
 		}
 	}

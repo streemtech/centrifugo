@@ -80,7 +80,7 @@ func (j JSONRawOrString) MarshalJSON() ([]byte, error) {
 	return j, nil
 }
 
-type KafkaJSONEvent struct {
+type JSONEvent struct {
 	Method  string          `json:"method"`
 	Payload JSONRawOrString `json:"payload"`
 }
@@ -395,7 +395,7 @@ func (pc *partitionConsumer) consume() {
 				default:
 				}
 
-				var e KafkaJSONEvent
+				var e JSONEvent
 				err := json.Unmarshal(record.Value, &e)
 				if err != nil {
 					pc.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelError, "error unmarshalling event from Kafka", map[string]any{"error": err.Error(), "topic": record.Topic, "partition": record.Partition}))
