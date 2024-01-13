@@ -77,6 +77,7 @@ func (r *AMQPConsumer) Run(ctx context.Context) error {
 
 	//start listening for data from the channel.
 	for delivery := range deliveryChannel {
+		r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelTrace, "event from AMQP", map[string]any{"queue": r.config.Queue}))
 
 		//parse event
 		var e JSONEvent
@@ -95,6 +96,8 @@ func (r *AMQPConsumer) Run(ctx context.Context) error {
 			if err == nil {
 				if retries > 0 {
 					r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelInfo, "OK processing events after errors", map[string]any{}))
+				} else {
+					r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelTrace, "event from AMQP delivered", map[string]any{"queue": r.config.Queue}))
 				}
 				delivery.Ack(false)
 				break
