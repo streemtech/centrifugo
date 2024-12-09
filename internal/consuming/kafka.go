@@ -92,7 +92,7 @@ func (j JSONRawOrString) MarshalJSON() ([]byte, error) {
 	return j, nil
 }
 
-type KafkaJSONEvent struct {
+type JSONEvent struct {
 	Method  string          `json:"method"`
 	Payload JSONRawOrString `json:"payload"`
 }

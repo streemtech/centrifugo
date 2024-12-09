@@ -62,6 +62,12 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.19 // indirect
+	github.com/rabbitmq/amqp091-go v1.9.0 // indirect
+	go.uber.org/mock v0.3.0 // indirect
 )
 
 require (
