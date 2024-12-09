@@ -23,7 +23,7 @@ type RabbitMQConfig struct {
 	// Vhost is the rabbitmq vhost that will be connected to
 	Vhost string `mapstructure:"vhost" json:"vhost" envconfig:"vhost" yaml:"vhost" toml:"vhost"`
 	// Queue is the queue that the client will being consuming messages from.
-	// The consumer will not create the queue, so it must be created beforehand.
+	// The consumer will not create the queue. It must be created beforehand with the desired settings.
 	Queue string `mapstructure:"queue" json:"queue" envconfig:"queue" yaml:"queue" toml:"queue"`
 
 	// MaxRetries is the number of attempts to send the message to the centrifugo dispatch.
@@ -224,6 +224,9 @@ func (r *RabbitMQConsumer) constructPayload(delivery amqp.Delivery) (payload []b
 		"channel": s,
 		"data":    string(delivery.Body),
 		//TODO: consider other variables that need to be set...
+
+		//I may be able to parse the config for what headers to look for?
+		//that or parse for raw values from the config. Not really sure.. Not sure.
 	}
 
 	body, err := json.Marshal(outputBody)
