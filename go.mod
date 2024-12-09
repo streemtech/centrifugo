@@ -23,11 +23,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/quic-go/quic-go v0.48.2
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66
-	github.com/nats-io/nats.go v1.31.0
-	github.com/prometheus/client_golang v1.18.0
-	github.com/quic-go/quic-go v0.40.1
-	github.com/quic-go/webtransport-go v0.6.0
-	github.com/rabbitmq/amqp091-go v1.9.0
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rakutentech/jwk-go v1.1.3
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.8.1
@@ -67,11 +63,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
-	github.com/pierrec/lz4/v4 v4.1.19 // indirect
-	go.uber.org/mock v0.3.0 // indirect
 )
 
 require (
