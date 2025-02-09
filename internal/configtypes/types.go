@@ -573,6 +573,7 @@ type Proxy struct {
 const (
 	ConsumerTypePostgres = "postgresql"
 	ConsumerTypeKafka    = "kafka"
+	ConsumerTypeRabbitMQ = "rabbitmq"
 )
 
 var KnownConsumerTypes = []string{
@@ -594,6 +595,8 @@ type Consumer struct {
 	Postgres PostgresConsumerConfig `mapstructure:"postgresql" json:"postgresql" envconfig:"postgresql" yaml:"postgresql" toml:"postgresql"`
 	// Kafka allows defining options for consumer of kafka type.
 	Kafka KafkaConsumerConfig `mapstructure:"kafka" json:"kafka" envconfig:"kafka" yaml:"kafka" toml:"kafka"`
+
+	RabbitMQ RabbitMQConsumerConfig
 }
 
 func decodeToNamedSlice(value string, target interface{}) error {
@@ -718,6 +721,83 @@ type KafkaPublicationDataModeConfig struct {
 	// Kafka message. See https://centrifugal.dev/docs/server/server_api#publishrequest.
 	IdempotencyKeyHeader string `mapstructure:"idempotency_key_header" json:"idempotency_key_header" envconfig:"idempotency_key_header" yaml:"idempotency_key_header" toml:"idempotency_key_header"`
 	// DeltaHeader is a header name to extract Publication delta flag from Kafka message
+	// which tells Centrifugo whether to use delta compression for message or not.
+	// See https://centrifugal.dev/docs/server/delta_compression and
+	// https://centrifugal.dev/docs/server/server_api#publishrequest.
+	DeltaHeader string `mapstructure:"delta_header" json:"delta_header" envconfig:"delta_header" yaml:"delta_header" toml:"delta_header"`
+}
+
+// KafkaConsumerConfig is a configuration for Rabbitmq async consumer.
+type RabbitMQConsumerConfig struct {
+
+	// Address is the RabbitMQ URI used to connect to rabbitMQ.
+	// Username and Password are passed in via this uri like the following
+	// amqp://username:password@rabbitmq.hostname:5672
+	Address string `mapstructure:"address" json:"address" envconfig:"address" yaml:"address" toml:"address"`
+	// Vhost is the rabbitmq vhost that will be connected to
+	Vhost string `mapstructure:"vhost" json:"vhost" envconfig:"vhost" yaml:"vhost" toml:"vhost"`
+	// Queue is the queue that the client will being consuming messages from.
+	// The consumer will not create the queue. It must be created beforehand with the desired settings.
+	Queue string `mapstructure:"queue" json:"queue" envconfig:"queue" yaml:"queue" toml:"queue"`
+
+	// MaxRetries is the number of attempts to send the message to the centrifugo dispatch.
+	// Retries will follow an exponential backoff.
+	MaxRetries int `mapstructure:"max_retries" json:"max_retries" envconfig:"max_retries" yaml:"max_retries" toml:"max_retries"`
+
+	// PublicationDataMode is a configuration for the mode where message payload already
+	// contains data ready to publish into channels, instead of API command.
+	PublicationDataMode RabbitMQPublicationDataModeConfig `mapstructure:"publication_data_mode" json:"publication_data_mode" envconfig:"publication_data_mode" yaml:"publication_data_mode" toml:"publication_data_mode"`
+}
+
+func (c RabbitMQConsumerConfig) Validate() error {
+	if c.Address == "" {
+		return errors.New("address is required")
+	}
+	if c.Vhost == "" {
+		return errors.New("vhost is required")
+	}
+	if c.Queue == "" {
+		return errors.New("queue is required")
+	}
+
+	if c.PublicationDataMode.Enabled {
+
+		templateSet := c.PublicationDataMode.ChannelTemplate != ""
+		channelsHeaderSet := c.PublicationDataMode.ChannelsHeader != ""
+		if channelsHeaderSet == templateSet {
+			return errors.New("must provide exactly one of channel_template and channels_header")
+		}
+
+		// if config.PublicationDataMode.Method == "" {
+		// 	//TODO determine if I should default to publish or error?
+		// 	//Publish is a reasonable default...
+		// 	config.PublicationDataMode.Method = "publish"
+		// 	// return nil, errors.New("no channel method provided in publication data mode")
+		// }
+	}
+	return nil
+}
+
+type RabbitMQPublicationDataModeConfig struct {
+	// Enabled enables publication data mode for the rabbitmq consumer.
+	Enabled bool `mapstructure:"enabled" json:"enabled" envconfig:"enabled" yaml:"enabled" toml:"enabled"`
+
+	// TODO determine if any method other than publish can even be reasonably supported. Broadcast MIGHT be able to be supported, but channel template would have to be array aware.
+	// Method is the method that will be used to send data to. If unset, it will default to "publish"
+	// currently supported methods are "publish" and "broadcast"
+	// Method string `mapstructure:"method" json:"method" envconfig:"method" yaml:"method" toml:"method"`
+
+	// ChannelTemplate is the source template parsed and executed by fasttemplate to determine what channel to
+	// send any recieved messages from rabbitMQ to.
+	ChannelTemplate string `mapstructure:"channel_template" json:"channel_template" envconfig:"channel_template" yaml:"channel_template" toml:"channel_template"`
+
+	// ChannelsHeader is a header name to extract channels to publish data into
+	// (channels must be comma-separated). Ex. of value: "channel1,channel2".
+	ChannelsHeader string `mapstructure:"channels_header" json:"channels_header" envconfig:"channels_header" yaml:"channels_header" toml:"channels_header"`
+	// IdempotencyKeyHeader is a header name to extract Publication idempotency key from
+	// Kafka message. See https://centrifugal.dev/docs/server/server_api#publishrequest.
+	IdempotencyKeyHeader string `mapstructure:"idempotency_key_header" json:"idempotency_key_header" envconfig:"idempotency_key_header" yaml:"idempotency_key_header" toml:"idempotency_key_header"`
+	// DeltaHeader is a header name to extract Publication delta flag from the rabbitmq message
 	// which tells Centrifugo whether to use delta compression for message or not.
 	// See https://centrifugal.dev/docs/server/delta_compression and
 	// https://centrifugal.dev/docs/server/server_api#publishrequest.

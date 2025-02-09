@@ -43,6 +43,13 @@ func New(nodeID string, dispatcher Dispatcher, configs []ConsumerConfig) ([]serv
 			}
 			log.Info().Str("consumer_name", config.Name).Msg("running consumer")
 			services = append(services, consumer)
+		} else if config.Type == configtypes.ConsumerTypeRabbitMQ {
+			consumer, err := NewRabbitMQConsumer(config.Name, logger, dispatcher, config.RabbitMQ, metrics)
+			if err != nil {
+				return nil, fmt.Errorf("error initializing AMQP consumer (%s): %w", config.Name, err)
+			}
+			log.Info().Str("consumer_name", config.Name).Msg("running consumer")
+			services = append(services, consumer)
 		} else {
 			return nil, fmt.Errorf("unknown consumer type: %s", config.Type)
 		}
