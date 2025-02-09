@@ -59,6 +59,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/shadowspore/fossil-delta v0.0.0-20241003175239-d3b7ce6bda62 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect

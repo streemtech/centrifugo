@@ -9,15 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/centrifugal/centrifuge"
-	"github.com/centrifugal/centrifugo/v5/internal/configtypes"
+	"github.com/centrifugal/centrifugo/v6/internal/configtypes"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 	"github.com/valyala/fasttemplate"
 )
 
 type RabbitMQConsumer struct {
 	name          string
-	logger        Logger
 	config        configtypes.RabbitMQConsumerConfig
 	dispatcher    Dispatcher
 	client        *amqp.Connection
@@ -27,7 +26,7 @@ type RabbitMQConsumer struct {
 	metrics       *commonMetrics
 }
 
-func NewRabbitMQConsumer(name string, logger Logger, dispatcher Dispatcher, config configtypes.RabbitMQConsumerConfig, metrics *commonMetrics) (*RabbitMQConsumer, error) {
+func NewRabbitMQConsumer(name string, dispatcher Dispatcher, config configtypes.RabbitMQConsumerConfig, metrics *commonMetrics) (*RabbitMQConsumer, error) {
 	if config.Address == "" {
 		return nil, errors.New("address is required")
 	}
@@ -76,7 +75,6 @@ func NewRabbitMQConsumer(name string, logger Logger, dispatcher Dispatcher, conf
 	return &RabbitMQConsumer{
 		name:       name,
 		client:     client,
-		logger:     logger,
 		dispatcher: dispatcher,
 		config:     config,
 		template:   template,
@@ -102,25 +100,27 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 		return fmt.Errorf("error consuming from queue %s: %w", c.config.Queue, err)
 	}
 
-	c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelInfo, "connecting to RabbitMQ queue", map[string]any{"queue": c.config.Queue}))
+	log.Info().Str("consumer_name", c.name).Str("queue", c.config.Queue).Msg("connecting to RabbitMQ queue")
 
 	//start listening for data from the channel.
 	for {
 		select {
 		case <-c.cancelChannel:
+
 			//A cancel event was received. We should log and return an error to attempt to re-connect to the server
-			c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelWarn, "unexpected RabbitMQ channel cancel", map[string]any{}))
+			log.Warn().Str("consumer_name", c.name).Msg("unexpected RabbitMQ channel cancel")
 			return errors.New("unexpected RabbitMQ channel cancel")
 		case <-c.closeChannel:
 			//A close event was received. We should log and return an error to attempt to re-connect to the server
-			c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelWarn, "unexpected RabbitMQ channel close", map[string]any{}))
+			log.Warn().Str("consumer_name", c.name).Msg("unexpected RabbitMQ channel close")
 			return errors.New("unexpected RabbitMQ channel close")
 		case <-ctx.Done():
 			//The provided context has completed. Return the error from the context.
 			return ctx.Err()
 
 		case delivery := <-deliveryChannel:
-			c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelTrace, "event from RabbitMQ", map[string]any{"queue": c.config.Queue}))
+			log.Debug().Str("consumer_name", c.name).Str("queue", c.config.Queue).Msg("event from RabbitMQ")
+
 			var method string
 			var payload []byte
 
@@ -132,7 +132,7 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 				//When publication mode is enabled, use the
 				payload, err = c.constructPayload(delivery)
 				if err != nil {
-					c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelError, "error constructing publicationModePayload", map[string]any{"error": err.Error(), "queue": c.config.Queue}))
+					log.Err(err).Str("consumer_name", c.name).Str("queue", c.config.Queue).Msg("error constructing publicationModePayload")
 					delivery.Ack(false)
 					continue
 				}
@@ -142,7 +142,7 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 				var e KafkaJSONEvent
 				err := json.Unmarshal(delivery.Body, &e)
 				if err != nil {
-					c.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelError, "error unmarshaling event from RabbitMQ", map[string]any{"error": err.Error(), "queue": c.config.Queue}))
+					log.Err(err).Str("consumer_name", c.name).Str("queue", c.config.Queue).Msg("error unmarshaling event from RabbitMQ")
 					delivery.Ack(false)
 					continue
 				}
@@ -223,27 +223,29 @@ func (r *RabbitMQConsumer) constructPayload(delivery amqp.Delivery) (payload []b
 	return body, nil
 }
 
-func (r *RabbitMQConsumer) SendWithRetry(ctx context.Context, method string, payload []byte) (fatal bool, err error) {
+func (c *RabbitMQConsumer) SendWithRetry(ctx context.Context, method string, payload []byte) (fatal bool, err error) {
 
 	//attempt dispatch
 	var backoffDuration time.Duration = 0
 	retries := 0
 	for {
-		err := r.dispatcher.Dispatch(ctx, method, payload)
+		err := c.dispatcher.Dispatch(ctx, method, payload)
 		if err == nil {
-			r.metrics.processedTotal.WithLabelValues(r.name).Inc()
+			c.metrics.processedTotal.WithLabelValues(c.name).Inc()
 			if retries > 0 {
-				r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelInfo, "OK processing events after errors", map[string]any{}))
+				log.Info().Str("consumer_name", c.name).Msg("OK processing events after errors")
 			}
 			return false, nil
 		}
 
-		r.metrics.errorsTotal.WithLabelValues(r.name).Inc()
-		r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelError, "error processing consumed event", map[string]any{"error": err.Error(), "method": method, "nextAttemptIn": backoffDuration.String()}))
+		c.metrics.errorsTotal.WithLabelValues(c.name).Inc()
+		log.Err(err).Str("consumer_name", c.name).Str("method", method).Dur("nextAttemptIn", backoffDuration).Msg("error processing consumed event")
 
 		//allow escaping to prevent locking.
-		if retries > r.config.MaxRetries && r.config.MaxRetries > 0 {
-			r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelError, "reached max retries processing event", map[string]any{}))
+		//TODO inquire: kafka currently goes forever. Is this desired?
+		if retries > c.config.MaxRetries && c.config.MaxRetries > 0 {
+
+			log.Error().Str("consumer_name", c.name).Str("method", method).Msg("reached max retries processing event")
 			return false, errors.New("reached max retries processing event")
 		}
 
@@ -252,11 +254,11 @@ func (r *RabbitMQConsumer) SendWithRetry(ctx context.Context, method string, pay
 		select {
 		case <-time.After(backoffDuration):
 			continue
-		case <-r.cancelChannel:
-			r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelWarn, "unexpected RabbitMQ channel cancel", map[string]any{}))
+		case <-c.cancelChannel:
+			log.Warn().Str("consumer_name", c.name).Str("method", method).Msg("unexpected RabbitMQ channel cancel")
 			return true, errors.New("unexpected RabbitMQ channel cancel")
-		case <-r.closeChannel:
-			r.logger.Log(centrifuge.NewLogEntry(centrifuge.LogLevelWarn, "unexpected RabbitMQ channel close", map[string]any{}))
+		case <-c.closeChannel:
+			log.Warn().Str("consumer_name", c.name).Str("method", method).Msg("unexpected RabbitMQ channel close")
 			return true, errors.New("unexpected RabbitMQ channel close")
 		case <-ctx.Done():
 			return true, ctx.Err()
