@@ -79,7 +79,10 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 
 	c.closeChannel = channel.NotifyClose(make(chan *amqp.Error))
 	c.cancelChannel = channel.NotifyCancel(make(chan string))
-	defer channel.Close()
+
+	defer func() {
+		go channel.Close()
+	}()
 
 	log.Info().Str("consumer_name", c.name).Str("queue", c.config.Queue).Msg("connecting to RabbitMQ queue")
 	deliveryChannel, err := channel.ConsumeWithContext(ctx, c.config.Queue, "", false, false, false, false, nil)
@@ -91,11 +94,17 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-c.cancelChannel:
+			if contextDone(ctx) {
+				return ctx.Err()
+			}
 
 			//A cancel event was received. We should log and return an error to attempt to re-connect to the server
 			log.Warn().Str("consumer_name", c.name).Msg("unexpected RabbitMQ channel cancel")
 			return errors.New("unexpected RabbitMQ channel cancel")
 		case <-c.closeChannel:
+			if contextDone(ctx) {
+				return ctx.Err()
+			}
 			//A close event was received. We should log and return an error to attempt to re-connect to the server
 			log.Warn().Str("consumer_name", c.name).Msg("unexpected RabbitMQ channel close")
 			return errors.New("unexpected RabbitMQ channel close")
@@ -150,6 +159,15 @@ func (c *RabbitMQConsumer) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func contextDone(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+	}
+	return false
 }
 
 // construct the payload from the
